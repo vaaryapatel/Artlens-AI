@@ -124,3 +124,7 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+# Add your live Render domain here
+CSRF_TRUSTED_ORIGINS = [
+    "https://artlens-ai.onrender.com",
+]
