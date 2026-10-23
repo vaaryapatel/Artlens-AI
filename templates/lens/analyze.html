@@ -1,44 +1,141 @@
-<!DOCTYPE html>
+{% load static %}<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>ArtLens AI — Artwork Analyzer</title>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 700px; margin: 40px auto; padding: 20px; background: #f9f9f9; color: #333; }
-        .card { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        input[type="file"] { margin-bottom: 15px; }
-        button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 1rem; }
-        button:hover { background: #0056b3; }
-        .result { white-space: pre-wrap; background: #f1f3f5; padding: 15px; border-radius: 6px; margin-top: 15px; }
-        #loading { display: none; color: #007bff; font-weight: bold; margin-top: 10px; }
-    </style>
+    <meta name="description" content="Upload a painting or drawing and get an art-historical reading: identification, visual description and interpretive context.">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'lens/css/style.css' %}">
 </head>
 <body>
-    <div class="card">
-        <h1>🎨 ArtLens AI Analyzer</h1>
-        <p>Upload a painting or artwork to get an instant expert art-historical breakdown.</p>
-        
-        <form method="post" enctype="multipart/form-data" onsubmit="showLoading()">
-            {% csrf_token %}
-            <input type="file" name="artwork_image" accept="image/*" required><br>
-            <button type="submit" id="submit-btn">Analyze Artwork</button>
-            <div id="loading">⏳ Analyzing artwork with Gemini (this takes about 1–2 minutes)...</div>
-        </form>
-    </div>
+<div class="page">
 
-    {% if analysis_result %}
-    <div class="card">
-        <h3>🧠 AI Analysis Result:</h3>
-        <div class="result">{{ analysis_result }}</div>
-    </div>
-    {% endif %}
+    <!-- ───────── Header ───────── -->
+    <header class="site-header">
+        <a class="logo" href="#top" aria-label="ArtLens AI, home">al.</a>
+        <nav class="nav" aria-label="Primary">
+            <a href="#analyze">Analyze</a>
+            <a href="#about">About</a>
+            <a href="https://github.com/vaaryapatel/Artlens-AI" target="_blank" rel="noopener">GitHub</a>
+        </nav>
+    </header>
 
-    <script>
-        function showLoading() {
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('submit-btn').disabled = true;
-            document.getElementById('submit-btn').style.opacity = '0.6';
-        }
-    </script>
+    <main id="top">
+
+        <!-- ───────── Hero ───────── -->
+        <section class="hero">
+            <h1 class="hero-title">Hello, I’m<br>ArtLens.</h1>
+            <p class="hero-sub">
+                An AI that looks at a painting the way an art historian would,
+                naming the work, reading its style and placing it in time.
+            </p>
+            <a class="hero-arrow" href="#analyze" aria-label="Scroll to the analyzer">↓</a>
+        </section>
+
+        <!-- ───────── 01 / Analyze ───────── -->
+        <section class="row" id="analyze">
+            <div class="row-text">
+                <p class="eyebrow">01 / ANALYZE</p>
+                <p class="row-copy">
+                    Upload a photo of a painting or drawing. You get an
+                    identification, a visual breakdown and interpretive context.
+                </p>
+                <p class="row-meta">
+                    Accepts JPG, PNG or WebP.<br>
+                    Analysis usually takes one to two minutes.
+                </p>
+                <p id="file-meta" class="file-meta" hidden></p>
+
+                <form id="analyze-form" method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <input class="visually-hidden" type="file" id="artwork_image"
+                           name="artwork_image" accept="image/*" required>
+
+                    <div class="actions">
+                        <button type="submit" id="submit-btn" class="link-btn">Analyze artwork →</button>
+                        <button type="button" id="reset-btn" class="link-btn link-btn--quiet" hidden>Choose another ↗</button>
+                    </div>
+                    <p id="status" class="status" role="status" aria-live="polite" hidden>
+                        Analyzing with Gemini. This can take a minute or two…
+                    </p>
+                </form>
+            </div>
+
+            <div class="row-media">
+                <label for="artwork_image" id="dropzone" class="dropzone">
+                    <img id="preview" class="preview" alt="Preview of the selected artwork" hidden>
+                    <span class="dropzone-hint" id="dropzone-hint">
+                        <span class="dropzone-plus">+</span>
+                        Drop an artwork here<br>or click to upload
+                    </span>
+                </label>
+            </div>
+        </section>
+
+        <hr class="rule">
+
+        <!-- ───────── 02 / Result ───────── -->
+        <section class="row row--result" id="result-section">
+            <aside class="row-text row-text--sticky">
+                <p class="eyebrow">02 / RESULT</p>
+                <p class="row-copy">
+                    {% if analysis_result %}
+                        Here’s what ArtLens sees in your image.
+                    {% else %}
+                        Your analysis will appear here once you upload an artwork.
+                    {% endif %}
+                </p>
+
+                <!-- Filled in by main.js: thumbnail of your upload, quick facts, copy button -->
+                <img id="result-thumb" class="result-thumb" alt="Your uploaded artwork" hidden>
+                <dl id="result-facts" class="facts facts--compact" hidden></dl>
+                <button type="button" id="copy-btn" class="link-btn" hidden>Copy analysis</button>
+
+                <p class="row-meta row-meta--note">
+                    Dates and attributions are estimates, not authentication.
+                </p>
+            </aside>
+
+            <div class="row-media row-media--text">
+                {% if analysis_result %}
+                    <div id="result-content" class="prose">{{ analysis_result }}</div>
+                {% else %}
+                    <div id="result-content" class="prose prose--empty">Nothing to show yet.</div>
+                {% endif %}
+            </div>
+        </section>
+
+        <hr class="rule">
+
+        <!-- ───────── About ───────── -->
+        <section class="row" id="about">
+            <div class="row-text">
+                <p class="eyebrow">ABOUT</p>
+                <p class="row-copy">
+                    ArtLens AI is a student project exploring how retrieval and
+                    classification can ground an LLM’s art-historical claims.
+                </p>
+            </div>
+
+            <dl class="facts">
+                <div><dt>Stack</dt><dd>Python, Django, CLIP, FAISS, scikit-learn, Gemini, Docker</dd></div>
+                <div><dt>Data</dt><dd>WikiArt, Met Open Access, Art Institute of Chicago</dd></div>
+                <div><dt>Built by</dt><dd>Manasvi Pathak, Vaarya Patel</dd></div>
+                <div><dt>Source</dt><dd><a href="https://github.com/vaaryapatel/Artlens-AI" target="_blank" rel="noopener">github.com/vaaryapatel/Artlens-AI</a></dd></div>
+            </dl>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <span>© ArtLens AI</span>
+        <a href="#top">Back to top ↑</a>
+    </footer>
+</div>
+
+<script src="{% static 'lens/js/main.js' %}" defer></script>
 </body>
 </html>

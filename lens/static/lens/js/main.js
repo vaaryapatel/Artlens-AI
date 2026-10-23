@@ -1,0 +1,347 @@
+/* ArtLens AI — upload preview, drag & drop, in-page submit, result formatting
+   Place at: lens/static/lens/js/main.js */
+
+(function () {
+    "use strict";
+
+    var form = document.getElementById("analyze-form");
+    var input = document.getElementById("artwork_image");
+    var dropzone = document.getElementById("dropzone");
+    var preview = document.getElementById("preview");
+    var hint = document.getElementById("dropzone-hint");
+    var submitBtn = document.getElementById("submit-btn");
+    var resetBtn = document.getElementById("reset-btn");
+    var statusEl = document.getElementById("status");
+    var fileMeta = document.getElementById("file-meta");
+
+    if (!form || !input) return;
+
+    var previewUrl = null;
+
+    /* ---------- Preview ---------- */
+    function formatBytes(bytes) {
+        if (bytes < 1024 * 1024) return Math.max(1, Math.round(bytes / 1024)) + " KB";
+        return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+    }
+
+    function showPreview(file) {
+        if (!file || !file.type || file.type.indexOf("image/") !== 0) return;
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        previewUrl = URL.createObjectURL(file);
+        preview.src = previewUrl;
+        preview.hidden = false;
+        hint.hidden = true;
+        resetBtn.hidden = false;
+
+        if (fileMeta) {
+            fileMeta.textContent = file.name + " · " + formatBytes(file.size);
+            fileMeta.hidden = false;
+        }
+        enhanceResult();   // keep the result thumbnail in sync with the current image
+    }
+
+    function clearPreview() {
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        previewUrl = null;
+        input.value = "";
+        preview.removeAttribute("src");
+        preview.hidden = true;
+        hint.hidden = false;
+        resetBtn.hidden = true;
+        if (fileMeta) { fileMeta.hidden = true; fileMeta.textContent = ""; }
+        setStatus("");
+    }
+
+    input.addEventListener("change", function () {
+        if (input.files && input.files[0]) showPreview(input.files[0]);
+    });
+
+    resetBtn.addEventListener("click", function () {
+        clearPreview();
+        input.click();
+    });
+
+    /* ---------- Drag & drop ---------- */
+    ["dragenter", "dragover"].forEach(function (evt) {
+        dropzone.addEventListener(evt, function (e) {
+            e.preventDefault();
+            dropzone.classList.add("is-dragover");
+        });
+    });
+
+    ["dragleave", "drop"].forEach(function (evt) {
+        dropzone.addEventListener(evt, function (e) {
+            e.preventDefault();
+            dropzone.classList.remove("is-dragover");
+        });
+    });
+
+    dropzone.addEventListener("drop", function (e) {
+        var files = e.dataTransfer && e.dataTransfer.files;
+        if (!files || !files.length) return;
+        try {
+            input.files = files;          // keeps the real <input> in sync for form submit
+        } catch (err) { /* older browsers: user can still click to upload */ }
+        showPreview(files[0]);
+    });
+
+    /* ---------- Status line ---------- */
+    function setStatus(message, isError) {
+        if (!message) {
+            statusEl.hidden = true;
+            statusEl.classList.remove("is-error");
+            return;
+        }
+        statusEl.textContent = message;
+        statusEl.classList.toggle("is-error", !!isError);
+        statusEl.hidden = false;
+    }
+
+    /* ---------- Result formatting ----------
+       Gemini returns light markdown: **bold**, *italic*, "---" dividers,
+       "### headings", "1. Section" titles and "-" bullets.
+       Everything is HTML-escaped first, then a few safe patterns are converted. */
+    function escapeHtml(s) {
+        return s
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+    }
+
+    function inline(s) {
+        return escapeHtml(s)
+            .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+            .replace(/(^|[\s(])\*([^*\s][^*]*)\*(?=[\s).,;:!?]|$)/g, "$1<em>$2</em>");
+    }
+
+    function stripMarks(s) {
+        return s.replace(/\*+/g, "").replace(/^#+\s*/, "").replace(/\s*:\s*$/, "").trim();
+    }
+
+    /* A short line like "1. Identification" or "**Composition & Structure**"
+       reads as a heading rather than a list item or paragraph. */
+    function looksLikeHeading(text, nextLine) {
+        var plain = stripMarks(text);
+        if (!plain || plain.length > 60 || /[.!?]$/.test(plain)) return false;
+        var wrapped = /^\*\*[^*]+\*\*:?$/.test(text.trim());
+        var endsWithColon = /:\s*\**$/.test(text.trim()) && plain.indexOf(":") === -1;
+        var nextIsBullet = !!nextLine && /^[-*•]\s+/.test(nextLine.trim());
+        return wrapped || endsWithColon || nextIsBullet;
+    }
+
+    function formatResult() {
+        var el = document.getElementById("result-content");
+        if (!el || el.classList.contains("prose--empty") || el.classList.contains("is-formatted")) return;
+
+        var lines = el.textContent.replace(/\r\n/g, "\n").split("\n");
+        var html = "";
+        var listType = null;
+
+        function closeList() {
+            if (listType) { html += "</" + listType + ">"; listType = null; }
+        }
+
+        function nextNonEmpty(from) {
+            for (var j = from; j < lines.length; j++) {
+                if (lines[j].trim()) return lines[j];
+            }
+            return "";
+        }
+
+        function prevNonEmpty(from) {
+            for (var j = from; j >= 0; j--) {
+                if (lines[j].trim()) return lines[j];
+            }
+            return "";
+        }
+
+        function isNumbered(s) { return /^\s*\d+[.)]\s+/.test(s || ""); }
+
+        lines.forEach(function (raw, i) {
+            var line = raw.trim();
+            if (!line) { closeList(); return; }
+
+            // Horizontal dividers: ---, ***, ___
+            if (/^([-*_])\1{2,}$/.test(line)) { closeList(); html += "<hr>"; return; }
+
+            // Markdown headings: ## Title
+            var md = line.match(/^(#{1,6})\s+(.*)$/);
+            if (md) {
+                closeList();
+                html += (md[1].length <= 2 ? "<h2>" : "<h3>") + inline(stripMarks(md[2])) + (md[1].length <= 2 ? "</h2>" : "</h3>");
+                return;
+            }
+
+            var bullet = line.match(/^[-*•]\s+(.*)$/);
+            var numbered = line.match(/^(\d+)[.)]\s+(.*)$/);
+            var next = nextNonEmpty(i + 1);
+
+            // "1. Identification" → section heading (keeps the number)
+            // A lone short numbered line (neighbours aren't numbered) is a title, not a one-item list
+            var loneTitle = numbered && !isNumbered(next) && !isNumbered(prevNonEmpty(i - 1)) &&
+                            stripMarks(numbered[2]).length <= 60 && !/[.!?]$/.test(stripMarks(numbered[2]));
+
+            if (numbered && (loneTitle || looksLikeHeading(numbered[2], next))) {
+                closeList();
+                html += "<h2>" + numbered[1] + ". " + escapeHtml(stripMarks(numbered[2])) + "</h2>";
+                return;
+            }
+
+            if (bullet || numbered) {
+                var type = bullet ? "ul" : "ol";
+                if (listType !== type) { closeList(); html += "<" + type + ">"; listType = type; }
+                html += "<li>" + inline((bullet || numbered)[numbered ? 2 : 1]) + "</li>";
+                return;
+            }
+
+            closeList();
+
+            // "**Composition & Structure**" on its own line → sub-heading
+            if (looksLikeHeading(line, next) && /^\*\*/.test(line)) {
+                html += "<h3>" + escapeHtml(stripMarks(line)) + "</h3>";
+            } else {
+                html += "<p>" + inline(line) + "</p>";
+            }
+        });
+        closeList();
+
+        // Don't start or end with a divider
+        html = html.replace(/^(<hr>)+/, "").replace(/(<hr>)+$/, "");
+
+        el.innerHTML = html;
+        el.classList.add("is-formatted");
+    }
+
+    /* ---------- Left column: thumbnail, quick facts, copy button ---------- */
+    var FACT_KEYS = [
+        { label: "Title",   re: /^title$/i },
+        { label: "Artist",  re: /^(artist|possible artist|artist\/era)$/i },
+        { label: "Era",     re: /^(era|era\s*\/\s*movement|movement|style|period)$/i },
+        { label: "Date",    re: /^(creation date|date|estimated (creation )?date|estimated date)$/i }
+    ];
+
+    function extractFacts(text) {
+        var found = {};
+        text.replace(/\r\n/g, "\n").split("\n").forEach(function (raw) {
+            var line = raw.trim().replace(/^[-*•]\s+/, "").replace(/^\d+[.)]\s+/, "");
+            var m = line.match(/^\**\s*([A-Za-z][A-Za-z \/]{1,40}?)\s*:?\**\s*:\s*\**\s*(.+)$/) ||
+                    line.match(/^\*\*([A-Za-z][A-Za-z \/]{1,40}?):\*\*\s*(.+)$/);
+            if (!m) return;
+            var key = m[1].trim();
+            var value = m[2].replace(/\*+/g, "").trim();
+            if (!value || value.length > 140) return;
+            FACT_KEYS.forEach(function (k) {
+                if (!found[k.label] && k.re.test(key)) found[k.label] = value;
+            });
+        });
+        return FACT_KEYS
+            .filter(function (k) { return found[k.label]; })
+            .map(function (k) { return { label: k.label, value: found[k.label] }; });
+    }
+
+    function enhanceResult() {
+        var content = document.getElementById("result-content");
+        var thumb = document.getElementById("result-thumb");
+        var facts = document.getElementById("result-facts");
+        var copyBtn = document.getElementById("copy-btn");
+        if (!content) return;
+
+        var hasResult = !content.classList.contains("prose--empty");
+
+        // Thumbnail of the image you uploaded (shown whenever one is selected)
+        if (thumb) {
+            if (previewUrl && hasResult) {
+                thumb.src = previewUrl;
+                thumb.hidden = false;
+            } else {
+                thumb.hidden = true;
+            }
+        }
+
+        if (!hasResult) return;
+
+        // Quick facts pulled from the identification section
+        if (facts && !facts.childElementCount) {
+            var items = extractFacts(content.textContent || "");
+            if (items.length) {
+                items.forEach(function (f) {
+                    var row = document.createElement("div");
+                    var dt = document.createElement("dt");
+                    var dd = document.createElement("dd");
+                    dt.textContent = f.label;
+                    dd.textContent = f.value;      // textContent: never interpreted as HTML
+                    row.appendChild(dt);
+                    row.appendChild(dd);
+                    facts.appendChild(row);
+                });
+                facts.hidden = false;
+            }
+        }
+
+        if (copyBtn) copyBtn.hidden = false;
+    }
+
+    /* Copy analysis (delegated: the result section is replaced after each analysis) */
+    document.addEventListener("click", function (e) {
+        var btn = e.target.closest && e.target.closest("#copy-btn");
+        if (!btn) return;
+        var content = document.getElementById("result-content");
+        if (!content || !navigator.clipboard) return;
+        navigator.clipboard.writeText(content.innerText.trim()).then(function () {
+            var old = btn.textContent;
+            btn.textContent = "Copied ✓";
+            setTimeout(function () { btn.textContent = old; }, 1600);
+        });
+    });
+
+    /* ---------- Submit without reloading ----------
+       The page keeps your image preview while the result is swapped in.
+       If anything goes wrong we fall back to a normal form submit. */
+    form.addEventListener("submit", function (e) {
+        if (!window.fetch || !window.DOMParser) return;      // fallback: normal POST
+        e.preventDefault();
+
+        if (!input.files || !input.files[0]) {
+            setStatus("Please choose an image first.", true);
+            return;
+        }
+
+        submitBtn.disabled = true;
+        setStatus("Analyzing with Gemini. This can take a minute or two…");
+
+        fetch(form.action || window.location.href, {
+            method: "POST",
+            body: new FormData(form),
+            headers: { "X-Requested-With": "XMLHttpRequest" },
+            credentials: "same-origin"
+        })
+            .then(function (res) {
+                if (!res.ok) throw new Error("Server responded with " + res.status);
+                return res.text();
+            })
+            .then(function (text) {
+                var doc = new DOMParser().parseFromString(text, "text/html");
+                var newSection = doc.getElementById("result-section");
+                var oldSection = document.getElementById("result-section");
+                if (!newSection || !oldSection) throw new Error("Unexpected response");
+
+                oldSection.innerHTML = newSection.innerHTML;
+                formatResult();
+                enhanceResult();
+                setStatus("");
+                oldSection.scrollIntoView({ behavior: "smooth", block: "start" });
+            })
+            .catch(function (err) {
+                console.error(err);
+                setStatus("Something went wrong while analyzing. Please try again.", true);
+            })
+            .then(function () {
+                submitBtn.disabled = false;
+            });
+    });
+
+    /* Format a server-rendered result (non-JS fallback path or first load) */
+    formatResult();
+    enhanceResult();
+})();
