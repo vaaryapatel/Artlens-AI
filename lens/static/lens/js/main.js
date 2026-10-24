@@ -169,10 +169,23 @@
                         navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
 
         if (!canStream) {
-            // No live camera available here: use the native camera / file picker instead
-            if (cameraFallback) cameraFallback.click();
+            console.warn("ArtLens: live camera unavailable. secureContext=" + window.isSecureContext +
+                         ", origin=" + window.location.origin);
+
+            // Phones: hand off to the native camera app
+            var isTouch = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+            if (isTouch && cameraFallback) { cameraFallback.click(); return; }
+
+            // Desktops: say why, instead of silently doing nothing
+            modal.hidden = false;
+            document.addEventListener("keydown", onCameraKey);
+            captureBtn.hidden = true;
+            switchBtn.hidden = true;
+            showCameraError("The browser blocks the camera on this address (" + window.location.host +
+                            "). Open the site at http://localhost:8000 or http://127.0.0.1:8000 and try again.");
             return;
         }
+        captureBtn.hidden = false;
 
         modal.hidden = false;
         document.addEventListener("keydown", onCameraKey);
