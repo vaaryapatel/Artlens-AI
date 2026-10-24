@@ -23,7 +23,7 @@ load_dotenv(BASE_DIR / ".env")
 SECRET_KEY = 'django-insecure-+cs2cwh1fs8t!@t6l!czy_*0benzjfy(s4_fwz!++!-iu%ejl$'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
 ALLOWED_HOSTS = ["*"]
 
