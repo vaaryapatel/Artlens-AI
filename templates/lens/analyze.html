@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'lens/css/style.css' %}">
+    <link rel="stylesheet" href="{% static 'lens/css/style.css' %}?v=3">
 </head>
 <body>
 <div class="page">
@@ -145,7 +145,6 @@
                 <p id="camera-error" class="camera-error" hidden></p>
             </div>
             <div class="camera-controls">
-                <button type="button" id="open-camera" class="camera-button"></button>
                 <button type="button" id="camera-capture" class="link-btn link-btn--light">Capture ◉</button>
                 <button type="button" id="camera-switch" class="link-btn link-btn--light" hidden>Flip camera ↻</button>
                 <button type="button" id="camera-close" class="link-btn link-btn--light link-btn--quiet">Cancel ✕</button>
@@ -160,6 +159,19 @@
     </footer>
 </div>
 
-<script src="{% static 'lens/js/main.js' %}" defer></script>
+<script src="{% static 'lens/js/main.js' %}?v=3" defer></script>
+<script>
+    /* Diagnostic: if main.js didn't load (wrong path or old cached copy), say so on the page */
+    window.addEventListener("load", function () {
+        if (window.__artlensJs === "camera-v3") return;
+        var s = document.getElementById("status");
+        if (s) {
+            s.textContent = "The page script is out of date or missing. Make sure lens/static/lens/js/main.js is the latest file, then press Ctrl+Shift+R.";
+            s.classList.add("is-error");
+            s.hidden = false;
+        }
+        console.error("ArtLens: main.js (camera-v3) did not load.");
+    });
+</script>
 </body>
 </html>

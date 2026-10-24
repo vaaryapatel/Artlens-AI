@@ -16,6 +16,8 @@
 
     if (!form || !input) return;
 
+    window.__artlensJs = "camera-v3";   // lets the page confirm this file really loaded
+
     var previewUrl = null;
 
     /* ---------- Preview ---------- */
@@ -143,7 +145,8 @@
     function startStream() {
         stopStream();
         cameraError.hidden = true;
-        captureBtn.disabled = false;
+        captureBtn.disabled = true;               // enabled once the video is really playing
+        captureBtn.textContent = "Starting camera…";
 
         return navigator.mediaDevices.getUserMedia({
             video: {
@@ -156,6 +159,19 @@
             stream = s;
             video.srcObject = s;
             video.classList.toggle("is-front", facing === "user");
+
+            // Capture only works once frames are flowing (videoWidth > 0)
+            var markReady = function () {
+                if (video.videoWidth > 0) {
+                    captureBtn.disabled = false;
+                    captureBtn.textContent = "Capture ◉";
+                }
+            };
+            video.onloadedmetadata = markReady;
+            video.onplaying = markReady;
+            var p = video.play();                  // some browsers ignore autoplay
+            if (p && p.catch) p.catch(function (e) { console.warn("video.play() blocked", e); });
+            markReady();
             // Only offer "Flip camera" when the device actually has more than one
             return navigator.mediaDevices.enumerateDevices().then(function (devices) {
                 var cams = devices.filter(function (d) { return d.kind === "videoinput"; });
@@ -207,12 +223,21 @@
     }
 
     function capturePhoto() {
-        if (!stream || !video.videoWidth) return;
+        if (!stream || !video.videoWidth) {
+            showCameraError("The camera isn’t showing a picture yet. Wait a second and try again.");
+            return;
+        }
 
         var canvas = document.createElement("canvas");
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
-        canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+        try {
+            canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+        } catch (err) {
+            console.error(err);
+            showCameraError("Couldn’t capture the photo. Please try again.");
+            return;
+        }
 
         canvas.toBlob(function (blob) {
             if (!blob) { showCameraError("Couldn’t capture the photo. Please try again."); return; }
