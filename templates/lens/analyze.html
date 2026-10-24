@@ -55,8 +55,14 @@
                     <input class="visually-hidden" type="file" id="artwork_image"
                            name="artwork_image" accept="image/*" required>
 
+                    <!-- Fallback used when the live camera can't be opened (e.g. phone over http):
+                         opens the phone's native camera app instead. -->
+                    <input class="visually-hidden" type="file" id="camera_fallback"
+                           accept="image/*" capture="environment" tabindex="-1" aria-hidden="true">
+
                     <div class="actions">
                         <button type="submit" id="submit-btn" class="link-btn">Analyze artwork →</button>
+                        <button type="button" id="camera-btn" class="link-btn">Take a photo ◉</button>
                         <button type="button" id="reset-btn" class="link-btn link-btn--quiet" hidden>Choose another ↗</button>
                     </div>
                     <p id="status" class="status" role="status" aria-live="polite" hidden>
@@ -129,6 +135,23 @@
             </dl>
         </section>
     </main>
+
+    <!-- ───────── Camera overlay (opened by "Take a photo") ───────── -->
+    <div id="camera-modal" class="camera-modal" role="dialog" aria-modal="true"
+         aria-label="Take a photo of the artwork" hidden>
+        <div class="camera-panel">
+            <div class="camera-stage">
+                <video id="camera-video" class="camera-video" autoplay playsinline muted></video>
+                <p id="camera-error" class="camera-error" hidden></p>
+            </div>
+            <div class="camera-controls">
+                <button type="button" id="camera-capture" class="link-btn link-btn--light">Capture ◉</button>
+                <button type="button" id="camera-switch" class="link-btn link-btn--light" hidden>Flip camera ↻</button>
+                <button type="button" id="camera-close" class="link-btn link-btn--light link-btn--quiet">Cancel ✕</button>
+            </div>
+            <p class="camera-tip">Fill the frame with the artwork and avoid glare.</p>
+        </div>
+    </div>
 
     <footer class="site-footer">
         <span>© ArtLens AI</span>

@@ -85,6 +85,162 @@
         showPreview(files[0]);
     });
 
+    /* ---------- Camera ----------
+       "Take a photo" opens a live preview (getUserMedia), captures a frame to a
+       JPEG File and drops it into the same <input type="file"> as a normal upload.
+       Browsers only allow the camera on https:// or http://localhost; anywhere else
+       (e.g. a phone opening http://192.168.x.x:8000) we fall back to the phone's
+       native camera app through a capture-enabled file input. */
+    var cameraBtn = document.getElementById("camera-btn");
+    var cameraFallback = document.getElementById("camera_fallback");
+    var modal = document.getElementById("camera-modal");
+    var video = document.getElementById("camera-video");
+    var cameraError = document.getElementById("camera-error");
+    var captureBtn = document.getElementById("camera-capture");
+    var switchBtn = document.getElementById("camera-switch");
+    var closeBtn = document.getElementById("camera-close");
+
+    var stream = null;
+    var facing = "environment";   // back camera first; "user" = front
+
+    function setInputFile(file) {
+        try {
+            var dt = new DataTransfer();
+            dt.items.add(file);
+            input.files = dt.files;
+        } catch (err) {
+            // Very old browsers: preview still works, but the form can't submit this file
+            console.warn("Could not attach captured photo to the form", err);
+        }
+        showPreview(file);
+    }
+
+    function stopStream() {
+        if (stream) {
+            stream.getTracks().forEach(function (t) { t.stop(); });
+            stream = null;
+        }
+        if (video) video.srcObject = null;
+    }
+
+    function closeCamera() {
+        stopStream();
+        modal.hidden = true;
+        document.removeEventListener("keydown", onCameraKey);
+        if (cameraBtn) cameraBtn.focus();
+    }
+
+    function onCameraKey(e) {
+        if (e.key === "Escape") closeCamera();
+    }
+
+    function showCameraError(message) {
+        cameraError.textContent = message;
+        cameraError.hidden = false;
+        captureBtn.disabled = true;
+    }
+
+    function startStream() {
+        stopStream();
+        cameraError.hidden = true;
+        captureBtn.disabled = false;
+
+        return navigator.mediaDevices.getUserMedia({
+            video: {
+                facingMode: { ideal: facing },
+                width: { ideal: 1920 },
+                height: { ideal: 1440 }
+            },
+            audio: false
+        }).then(function (s) {
+            stream = s;
+            video.srcObject = s;
+            video.classList.toggle("is-front", facing === "user");
+            // Only offer "Flip camera" when the device actually has more than one
+            return navigator.mediaDevices.enumerateDevices().then(function (devices) {
+                var cams = devices.filter(function (d) { return d.kind === "videoinput"; });
+                switchBtn.hidden = cams.length < 2;
+            });
+        });
+    }
+
+    function openCamera() {
+        var canStream = window.isSecureContext !== false &&
+                        navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
+
+        if (!canStream) {
+            // No live camera available here: use the native camera / file picker instead
+            if (cameraFallback) cameraFallback.click();
+            return;
+        }
+
+        modal.hidden = false;
+        document.addEventListener("keydown", onCameraKey);
+        captureBtn.focus();
+
+        startStream().catch(function (err) {
+            console.error(err);
+            var name = err && err.name;
+            if (name === "NotAllowedError" || name === "SecurityError") {
+                showCameraError("Camera access was blocked. Allow it in your browser’s address bar, then try again.");
+            } else if (name === "NotFoundError" || name === "OverconstrainedError") {
+                showCameraError("No camera was found on this device.");
+            } else if (name === "NotReadableError") {
+                showCameraError("The camera is being used by another app. Close it and try again.");
+            } else {
+                showCameraError("Couldn’t start the camera.");
+            }
+        });
+    }
+
+    function capturePhoto() {
+        if (!stream || !video.videoWidth) return;
+
+        var canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        canvas.toBlob(function (blob) {
+            if (!blob) { showCameraError("Couldn’t capture the photo. Please try again."); return; }
+            var stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+            var file = new File([blob], "camera-" + stamp + ".jpg", { type: "image/jpeg" });
+            closeCamera();
+            setInputFile(file);
+        }, "image/jpeg", 0.92);
+    }
+
+    if (cameraBtn && modal && video) {
+        cameraBtn.addEventListener("click", openCamera);
+        captureBtn.addEventListener("click", capturePhoto);
+        closeBtn.addEventListener("click", closeCamera);
+
+        switchBtn.addEventListener("click", function () {
+            facing = facing === "environment" ? "user" : "environment";
+            startStream().catch(function () {
+                facing = facing === "environment" ? "user" : "environment";   // revert on failure
+                startStream().catch(function () { showCameraError("Couldn’t switch cameras."); });
+            });
+        });
+
+        // Clicking the dark backdrop (not the panel) closes the camera
+        modal.addEventListener("click", function (e) {
+            if (e.target === modal) closeCamera();
+        });
+
+        window.addEventListener("pagehide", stopStream);
+    }
+
+    // Native-camera fallback: copy the shot into the main upload input
+    if (cameraFallback) {
+        cameraFallback.addEventListener("change", function () {
+            if (cameraFallback.files && cameraFallback.files[0]) {
+                setInputFile(cameraFallback.files[0]);
+                cameraFallback.value = "";
+            }
+        });
+    }
+
     /* ---------- Status line ---------- */
     function setStatus(message, isError) {
         if (!message) {
