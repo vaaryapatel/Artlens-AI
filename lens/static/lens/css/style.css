@@ -276,6 +276,20 @@ a { color: inherit; }
 
 .prose--empty { color: var(--faint); }
 
+/* ───────── Pipeline result card (known / unknown) ───────── */
+.pipeline-card {
+    max-width: 640px;
+    margin: 0 0 32px;
+    padding: 0 0 20px;
+    border-bottom: 1px solid #cfcfca;
+}
+
+.pipeline-card .eyebrow { margin-bottom: 14px; }
+.pipeline-card .facts { margin: 0 0 12px; }
+.pipeline-card .facts > div { grid-template-columns: 96px 1fr; }
+.pipeline-card .row-meta { margin: 0; }
+.pipeline-warning { margin: 0 0 8px; font-size: 12px; color: #a22; }
+
 /* ───────── Camera overlay ───────── */
 .camera-modal {
     position: fixed;

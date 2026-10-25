@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'lens/css/style.css' %}?v=3">
+    <link rel="stylesheet" href="{% static 'lens/css/style.css' %}?v=4">
 </head>
 <body>
 <div class="page">
@@ -107,6 +107,26 @@
             </aside>
 
             <div class="row-media row-media--text">
+                {% if pipeline %}
+                    <div class="pipeline-card" id="pipeline-card">
+                        <p class="eyebrow">{% if pipeline.known %}KNOWN ARTWORK · REFERENCE MATCH{% else %}NO REFERENCE MATCH · ESTIMATE{% endif %}</p>
+                        <dl class="facts facts--compact">
+                            {% if pipeline.known %}
+                                {% if pipeline.title %}<div><dt>Title</dt><dd>{{ pipeline.title }}</dd></div>{% endif %}
+                                {% if pipeline.artist %}<div><dt>Artist</dt><dd>{{ pipeline.artist }}</dd></div>{% endif %}
+                                {% if pipeline.year %}<div><dt>Year</dt><dd>{{ pipeline.year }}{% if pipeline.age_years %} ({{ pipeline.age_years }} years ago){% endif %}</dd></div>{% endif %}
+                                {% if pipeline.style %}<div><dt>Style</dt><dd>{{ pipeline.style }}</dd></div>{% endif %}
+                                <div><dt>Match</dt><dd>{{ pipeline.confidence }}% similarity</dd></div>
+                            {% else %}
+                                <div><dt>Style</dt><dd>{% for label, pct in pipeline.style_estimate %}{{ label }} {{ pct }}%{% if not forloop.last %}, {% endif %}{% endfor %}</dd></div>
+                                <div><dt>Period</dt><dd>{% for label, pct in pipeline.period_estimate %}{{ label }} {{ pct }}%{% if not forloop.last %}, {% endif %}{% endfor %}</dd></div>
+                                <div><dt>Confidence</dt><dd>{{ pipeline.confidence }}% (top period)</dd></div>
+                            {% endif %}
+                        </dl>
+                        {% for w in pipeline.warnings %}<p class="pipeline-warning">{{ w }}</p>{% endfor %}
+                        <p class="row-meta">{{ pipeline.note }}</p>
+                    </div>
+                {% endif %}
                 {% if analysis_result %}
                     <div id="result-content" class="prose">{{ analysis_result }}</div>
                 {% else %}
