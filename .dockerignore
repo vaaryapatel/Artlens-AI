@@ -1,0 +1,8 @@
+.git
+.env
+data/raw_images
+data/processed_images
+reports
+__pycache__
+*.pyc
+db.sqlite3
