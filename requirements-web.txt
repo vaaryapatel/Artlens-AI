@@ -1,4 +1,5 @@
 django
+dj-database-url>=2.2
 google-genai
 pillow>=10.2
 python-dotenv>=1.0
